@@ -1,0 +1,18 @@
+# Generador de splash Android 12+ (flutter_native_splash)
+# 1. Pon tu PNG en assets/splash/splash.png o logo en assets/splash/logo.png
+# 2. Ejecuta: dart run flutter_native_splash:create
+flutter_native_splash:
+  color: "#040F23"
+  # Si tienes logo centrado (512x512) descomenta:
+  # image: assets/splash/logo.png
+  # Si tienes splash a pantalla completa descomenta:
+  # image: assets/splash/splash.png
+  android: true
+  ios: false
+  android_12:
+    color: "#040F23"
+    image: assets/splash/logo.png
+    # imageDark: assets/splash/logo.png
+    # colorDark: "#040F23"
+    # icon_background_color: "#040F23"
+  web: false

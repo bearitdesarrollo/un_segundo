@@ -1,0 +1,11 @@
+# Generador de icono Android (flutter_launcher_icons)
+# 1. Pon tu PNG 1024x1024 en assets/icon/app_icon.png
+# 2. Ejecuta: dart run flutter_launcher_icons
+flutter_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
+  # adaptive icon (Android 8+)
+  adaptive_icon_background: "#040F23"
+  adaptive_icon_foreground: "assets/icon/app_icon.png"
