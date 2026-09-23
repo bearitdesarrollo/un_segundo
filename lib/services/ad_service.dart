@@ -18,11 +18,10 @@ class AdService {
   static const String _interstitialTestId = 'ca-app-pub-3940256099942544/1033173712';
   static const String _rewardedTestId = 'ca-app-pub-3940256099942544/5224354917';
 
-  // TODO: Replace with real IDs for release. Set useTestIds = false after replacing.
-  static const bool useTestIds = true;
-  static const String bannerIdProd = 'ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY';
-  static const String interstitialIdProd = 'ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY';
-  static const String rewardedIdProd = 'ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY';
+  static const bool useTestIds = false;
+  static const String bannerIdProd = 'ca-app-pub-7133242711612255/6305648300';
+  static const String interstitialIdProd = 'ca-app-pub-7133242711612255/9362361952';
+  static const String rewardedIdProd = 'ca-app-pub-7133242711612255/4761695405';
 
   String get bannerAdUnitId => useTestIds ? _bannerTestId : bannerIdProd;
   String get interstitialAdUnitId => useTestIds ? _interstitialTestId : interstitialIdProd;
@@ -141,19 +140,20 @@ class AdService {
     );
   }
 
-  /// Shows rewarded ad. Returns true if user earned reward.
+  /// Shows rewarded ad. Returns true if user earned reward (only after ad is dismissed).
   Future<bool> showRewarded({required void Function() onRewarded}) async {
     if (_rewardedAd == null) {
       loadRewarded();
       return false;
     }
     final completer = Completer<bool>();
+    bool earned = false;
     _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {
         ad.dispose();
         _rewardedAd = null;
         loadRewarded();
-        if (!completer.isCompleted) completer.complete(false);
+        if (!completer.isCompleted) completer.complete(earned);
       },
       onAdFailedToShowFullScreenContent: (ad, err) {
         ad.dispose();
@@ -163,11 +163,10 @@ class AdService {
       },
     );
     _rewardedAd!.show(onUserEarnedReward: (ad, reward) {
+      earned = true;
       onRewarded();
-      if (!completer.isCompleted) completer.complete(true);
     });
-    // If user closes before reward, completer will be completed via dismiss
-    return completer.future.timeout(const Duration(seconds: 30), onTimeout: () => false);
+    return completer.future.timeout(const Duration(seconds: 60), onTimeout: () => false);
   }
 
   bool get isRewardedReady => _rewardedAd != null;

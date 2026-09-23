@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/difficulty.dart';
 import '../../domain/entities/game_entities.dart';
@@ -30,6 +31,8 @@ class _GameScreenState extends State<GameScreen> {
   int _bombs = 2, _fifty = 2, _hints = 2;
   GhostRun? _ghostBest;
   DateTime? _runStart;
+  BannerAd? _bannerGO;
+  bool _bannerGOLoaded = false;
 
   @override
   void didChangeDependencies() {
@@ -43,8 +46,22 @@ class _GameScreenState extends State<GameScreen> {
       _ctrl.addListener(_onGameOver);
       _runStart = DateTime.now();
       _loadExtras();
+      _loadBannerGO();
       _initialized = true;
     }
+  }
+
+  void _loadBannerGO() {
+    _bannerGO?.dispose();
+    _bannerGO = BannerAd(
+      adUnitId: AdService().bannerAdUnitId,
+      size: AdSize.largeBanner, // 320x100 un poco más grande que banner 320x50
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (_) => mounted ? setState(() => _bannerGOLoaded = true) : null,
+        onAdFailedToLoad: (ad, _) { ad.dispose(); _bannerGO = null; },
+      ),
+    )..load();
   }
 
   Future<void> _loadExtras() async {
@@ -80,6 +97,7 @@ class _GameScreenState extends State<GameScreen> {
   void dispose() {
     _ctrl.removeListener(_onGameOver);
     _ctrl.dispose();
+    _bannerGO?.dispose();
     super.dispose();
   }
 
@@ -140,9 +158,10 @@ class _GameScreenState extends State<GameScreen> {
       ],
     ));
     if (res != true) return false;
+    final wasReady = AdService().isRewardedReady;
     final ok = await AdService().showRewarded(onRewarded: () {});
-    final granted = ok || !AdService().isRewardedReady;
-    if (!granted && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anuncio no disponible')));
+    final granted = ok || !wasReady;
+    if (!granted && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anuncio no disponible, cierra el anuncio después de verlo completo')));
     return granted;
   }
 
@@ -316,59 +335,82 @@ class _GameScreenState extends State<GameScreen> {
     return FutureBuilder<PlayerStats>(future: StorageService().loadStats(), builder: (context, snap) {
       final best = snap.data;
       final isNewRecord = best != null && s.score >= best.bestScore && s.score > 0;
-      return SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(children: [
-          const SizedBox(height: 12),
-          RepaintBoundary(
-            key: _shareKey,
-            child: RecordCard(level: s.level, score: s.score, streak: _ctrl.bestStreakThisGame, seed: _dailySeed, playerName: 'TÚ'),
+      return LayoutBuilder(builder: (context, constraints) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: constraints.maxWidth, maxHeight: constraints.maxHeight - 8),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                if (_bannerGOLoaded && _bannerGO != null)
+                  Container(
+                    alignment: Alignment.center,
+                    width: _bannerGO!.size.width.toDouble(),
+                    height: _bannerGO!.size.height.toDouble(),
+                    margin: const EdgeInsets.only(bottom: 4),
+                    decoration: BoxDecoration(color: AppTheme.bgCard, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppTheme.border)),
+                    child: AdWidget(ad: _bannerGO!),
+                  ),
+                Transform.scale(
+                  scale: 0.68,
+                  child: RepaintBoundary(
+                    key: _shareKey,
+                    child: RecordCard(level: s.level, score: s.score, streak: _ctrl.bestStreakThisGame, seed: _dailySeed, playerName: 'TÚ'),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Container(width: 44, height: 44, decoration: BoxDecoration(color: AppTheme.accent.withValues(alpha: 0.15), shape: BoxShape.circle, border: Border.all(color: AppTheme.accent, width: 1.5)), alignment: Alignment.center, child: const Text('💥', style: TextStyle(fontSize: 22))),
+                  const SizedBox(width: 10),
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('GAME OVER', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5, color: Colors.white)),
+                    if (isNewRecord) Container(margin: const EdgeInsets.only(top: 4), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(gradient: AppTheme.successGradient, borderRadius: BorderRadius.circular(20)), child: const Text('¡NUEVO RÉCORD!', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 9, letterSpacing: 1))),
+                  ]),
+                ]),
+                if (_dailySeed != null) Container(margin: const EdgeInsets.only(top: 4), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: AppTheme.warning.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10), border: Border.all(color: AppTheme.warning)), child: Text('SEED #$_dailySeed', style: const TextStyle(color: AppTheme.warning, fontWeight: FontWeight.w800, fontSize: 9))),
+                const SizedBox(height: 4),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: AppTheme.bgCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppTheme.border)), child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+                  _goStat('NIVEL', '${s.level}', AppTheme.accent2),
+                  Container(width: 1, height: 24, color: AppTheme.border),
+                  _goStat('PUNTOS', '${s.score}', AppTheme.warning),
+                  Container(width: 1, height: 24, color: AppTheme.border),
+                  _goStat('RACHA', 'x${_ctrl.bestStreakThisGame}', AppTheme.accent3),
+                ])),
+                if (best != null) Padding(padding: const EdgeInsets.only(top: 2), child: Text('Récord: ${best.bestScore} pts • Nivel ${best.bestLevel}', style: const TextStyle(color: AppTheme.textMuted, fontSize: 9))),
+                if (_ghostBest != null) Padding(padding: const EdgeInsets.only(top: 1), child: Text('👻 Fantasma: Nvl ${_ghostBest!.level} • ${_ghostBest!.score} pts', style: const TextStyle(color: AppTheme.textMuted, fontSize: 8))),
+                const SizedBox(height: 6),
+                if (!_ctrl.hasUsedRewarded) GameButton(label: 'CONTINUAR VIENDO ANUNCIO', icon: Icons.play_circle_rounded, primary: false, onPressed: () async {
+                  final wasReady = AdService().isRewardedReady;
+                  final ok = await AdService().showRewarded(onRewarded: () {});
+                  bool granted = ok || !wasReady;
+                  if (!granted) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Debes ver el anuncio completo para continuar'))); return; }
+                  if (granted) _ctrl.consumeRewardedContinue();
+                }),
+                if (!_ctrl.hasUsedRewarded) const SizedBox(height: 6),
+                GameButton(label: 'JUGAR DE NUEVO', icon: Icons.replay_rounded, onPressed: () { setState(() { _eliminated = {}; _hintActive = false; }); _ctrl.startGame(); _runStart = DateTime.now(); }),
+                const SizedBox(height: 6),
+                Row(children: [
+                  Expanded(child: GameButton(label: 'IMAGEN', icon: Icons.image_rounded, primary: false, dense: true, onPressed: () => ShareImageService.shareImage(_shareKey, level: s.level, score: s.score, extra: _dailySeed != null ? 'Seed #$_dailySeed' : null))),
+                  const SizedBox(width: 6),
+                  Expanded(child: GameButton(label: 'TEXTO', icon: Icons.share_rounded, primary: false, dense: true, onPressed: () => ShareImageService.shareText(level: s.level, score: s.score, seed: _dailySeed, streak: _ctrl.bestStreakThisGame))),
+                ]),
+                const SizedBox(height: 6),
+                Row(children: [
+                  Expanded(child: GameButton(label: 'CLIP 3S', icon: Icons.videocam_rounded, primary: false, dense: true, onPressed: () => ShareImageService.shareImage(_shareKey, level: s.level, score: s.score, extra: 'Clip 1 Segundo'))),
+                  const SizedBox(width: 6),
+                  Expanded(child: GameButton(label: 'INICIO', icon: Icons.home_rounded, primary: false, dense: true, onPressed: () async {
+                    final count = StorageService().gamesSinceInterstitial;
+                    if (count >= 3) { final shown = await AdService().showInterstitialIfAvailable(); if (shown) await StorageService().resetInterstitialCounter(); }
+                    if (context.mounted) Navigator.pop(context);
+                  })),
+                ]),
+              ]),
+            ),
           ),
-          const SizedBox(height: 12),
-          TweenAnimationBuilder<double>(tween: Tween(begin: 0.9, end: 1), duration: const Duration(milliseconds: 400), curve: Curves.easeOutBack, builder: (context, v, child) => Transform.scale(scale: v, child: child), child: Column(children: [
-            Container(width: 80, height: 80, decoration: BoxDecoration(color: AppTheme.accent.withValues(alpha: 0.15), shape: BoxShape.circle, border: Border.all(color: AppTheme.accent, width: 2)), alignment: Alignment.center, child: const Text('💥', style: TextStyle(fontSize: 36))),
-            const SizedBox(height: 12),
-            const Text('GAME OVER', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900, letterSpacing: -1, color: Colors.white)),
-            if (isNewRecord) Container(margin: const EdgeInsets.only(top: 8), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(gradient: AppTheme.successGradient, borderRadius: BorderRadius.circular(20)), child: const Text('¡NUEVO RÉCORD!', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 12, letterSpacing: 1))),
-            if (_dailySeed != null) Container(margin: const EdgeInsets.only(top: 8), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: AppTheme.warning.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppTheme.warning)), child: Text('SEED #$_dailySeed', style: const TextStyle(color: AppTheme.warning, fontWeight: FontWeight.w800, fontSize: 11))),
-          ])),
-          const SizedBox(height: 16),
-          Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: AppTheme.bgCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: AppTheme.border)), child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-            _goStat('NIVEL', '${s.level}', AppTheme.accent2),
-            Container(width: 1, height: 48, color: AppTheme.border),
-            _goStat('PUNTOS', '${s.score}', AppTheme.warning),
-            Container(width: 1, height: 48, color: AppTheme.border),
-            _goStat('RACHA', 'x${_ctrl.bestStreakThisGame}', AppTheme.accent3),
-          ])),
-          if (best != null) ...[const SizedBox(height: 8), Text('Récord: ${best.bestScore} pts • Nivel ${best.bestLevel}', style: const TextStyle(color: AppTheme.textMuted, fontSize: 12))],
-          if (_ghostBest != null) ...[const SizedBox(height: 6), Text('👻 Fantasma: Nvl ${_ghostBest!.level} • ${_ghostBest!.score} pts', style: const TextStyle(color: AppTheme.textMuted, fontSize: 11))],
-          const SizedBox(height: 16),
-          if (!_ctrl.hasUsedRewarded) GameButton(label: 'CONTINUAR VIENDO ANUNCIO', icon: Icons.play_circle_rounded, primary: false, onPressed: () async {
-            final ok = await AdService().showRewarded(onRewarded: () {});
-            bool granted = ok || !AdService().isRewardedReady;
-            if (!granted) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anuncio no disponible, continuas gratis'))); granted = true; }
-            if (granted) _ctrl.consumeRewardedContinue();
-          }),
-          if (!_ctrl.hasUsedRewarded) const SizedBox(height: 10),
-          GameButton(label: 'JUGAR DE NUEVO', icon: Icons.replay_rounded, onPressed: () { setState(() { _eliminated = {}; _hintActive = false; }); _ctrl.startGame(); _runStart = DateTime.now(); }),
-          const SizedBox(height: 10),
-          Row(children: [
-            Expanded(child: GameButton(label: 'COMPARTIR IMAGEN', icon: Icons.image_rounded, primary: false, onPressed: () => ShareImageService.shareImage(_shareKey, level: s.level, score: s.score, extra: _dailySeed != null ? 'Seed #$_dailySeed' : null))),
-            const SizedBox(width: 8),
-            Expanded(child: GameButton(label: 'COMPARTIR TEXTO', icon: Icons.share_rounded, primary: false, onPressed: () => ShareImageService.shareText(level: s.level, score: s.score, seed: _dailySeed, streak: _ctrl.bestStreakThisGame))),
-          ]),
-          const SizedBox(height: 10),
-          Row(children: [
-            Expanded(child: GameButton(label: 'CLIP 3S', icon: Icons.videocam_rounded, primary: false, onPressed: () => ShareImageService.shareImage(_shareKey, level: s.level, score: s.score, extra: 'Clip 1 Segundo'))),
-            const SizedBox(width: 8),
-            Expanded(child: GameButton(label: 'INICIO', icon: Icons.home_rounded, primary: false, onPressed: () async {
-              final count = StorageService().gamesSinceInterstitial;
-              if (count >= 3) { final shown = await AdService().showInterstitialIfAvailable(); if (shown) await StorageService().resetInterstitialCounter(); }
-              if (context.mounted) Navigator.pop(context);
-            })),
-          ]),
-        ]),
-      );
+        );
+      });
     });
   }
 

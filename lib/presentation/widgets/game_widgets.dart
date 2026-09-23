@@ -7,31 +7,36 @@ class GameButton extends StatelessWidget {
   final bool primary;
   final IconData? icon;
   final bool expanded;
-  const GameButton({super.key, required this.label, this.onPressed, this.primary = true, this.icon, this.expanded = true});
+  final bool dense;
+  const GameButton({super.key, required this.label, this.onPressed, this.primary = true, this.icon, this.expanded = true, this.dense = false});
 
   @override
   Widget build(BuildContext context) {
     // FittedBox + Flexible evita desbordamiento en pantallas angostas (ej. 320dp)
     // y en labels largos como "CÓMO JUGAR" cuando dos botones comparten la fila.
+    final iconSize = dense ? 14.0 : 18.0;
+    final fontSize = dense ? 11.0 : 14.0;
+    final letterSpacing = dense ? 0.4 : 0.8;
+    final gap = dense ? 4.0 : 6.0;
+    final hp = dense ? 10.0 : 16.0;
+    final vp = dense ? 10.0 : 16.0;
     final child = FittedBox(
       fit: BoxFit.scaleDown,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          if (icon != null) Icon(icon, size: 18),
-          if (icon != null) const SizedBox(width: 6),
+          if (icon != null) Icon(icon, size: iconSize),
+          if (icon != null) SizedBox(width: gap),
           Text(
             label,
             maxLines: 1,
             softWrap: false,
-            style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.8, fontSize: 14),
+            style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: letterSpacing, fontSize: fontSize),
           ),
         ],
       ),
     );
-    // Padding reducido (16 vs 28) para que dos botones en Row no desborden.
-    // Se mantiene altura mínima táctil 48dp (vertical 16).
     final btn = primary
         ? ElevatedButton(
             onPressed: onPressed,
@@ -39,7 +44,7 @@ class GameButton extends StatelessWidget {
               backgroundColor: AppTheme.accent,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              padding: EdgeInsets.symmetric(horizontal: hp, vertical: vp),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             child: child,
@@ -51,7 +56,7 @@ class GameButton extends StatelessWidget {
               side: const BorderSide(color: AppTheme.border, width: 1.5),
               backgroundColor: AppTheme.bgCard,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+              padding: EdgeInsets.symmetric(horizontal: hp - 2, vertical: vp),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             child: child,

@@ -1,4 +1,4 @@
-package com.bearit.un_segundo
+package com.bearit.unsegundo
 
 import io.flutter.embedding.android.FlutterActivity
 
